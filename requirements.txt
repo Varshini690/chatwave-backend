@@ -1,0 +1,9 @@
+flask==3.1.0
+Flask-Cors==5.0.0
+Flask-PyMongo==2.3.0
+pymongo==4.8.0
+flask-jwt-extended==4.6.0
+Flask-SocketIO==5.3.6
+eventlet==0.36.1
+python-dotenv==1.0.1
+Werkzeug==3.1.2
