@@ -44,7 +44,8 @@ def create_app():
     jwt.init_app(app)
     mail = Mail(app)
     serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+
 
     # ------------------------------------------------------
     # AUTO-CREATE MONGO COLLECTIONS & INDEXES
