@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()  # Must come first!
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
 from datetime import timezone, timedelta
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -611,4 +611,4 @@ def create_app():
 if __name__ == "__main__":
     print("🚀 Starting ChatWave Backend (Auto-friends + Block + Search)…")
     app, socketio = create_app()
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
