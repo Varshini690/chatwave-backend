@@ -1,6 +1,9 @@
 # --- gevent first (no eventlet needed) ---
 from gevent import monkey
 monkey.patch_all()
+from flask_mail import Message
+from werkzeug.security import generate_password_hash
+from itsdangerous import SignatureExpired, BadSignature
 
 from datetime import timezone, timedelta, datetime
 from flask import Flask, request, jsonify
@@ -153,61 +156,74 @@ def create_app():
         }), 200
 
 
+    # ============================================
+# 🔐 PASSWORD RESET ROUTES (WORKING WITH BREVO)
+# ============================================
+
     @app.route("/forgot-password", methods=["POST"])
     def forgot_password():
         data = request.get_json() or {}
         email = (data.get("email") or "").strip().lower()
 
-        # 1️⃣ Check if email is given
         if not email:
             return jsonify({"error": "Email is required"}), 400
 
-        # 2️⃣ Check if user exists in MongoDB
+        # Check if user exists
         user = mongo.db.users.find_one({"email": email})
         if not user:
+            print(f"❌ No user found for {email}")
             return jsonify({"error": "User not found"}), 404
 
-        # 3️⃣ Create reset token
+        # Generate reset token (30 min expiry handled in reset endpoint)
         token = serializer.dumps(email, salt="password-reset-salt")
+
+        # 🔗 Use your real frontend reset page:
         reset_link = f"https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app/reset-password/{token}"
 
-        # 4️⃣ Prepare the email message
-        msg = Message(
-            subject="ChatWave Password Reset 🔐",
-            sender=app.config.get("MAIL_DEFAULT_SENDER"),
-            recipients=[email],
-        )
-        msg.html = f"""
-            <div style='font-family:Inter,sans-serif;'>
-                <h2 style='color:#2563eb;'>Password Reset Request</h2>
-                <p>Hello <b>{user['username']}</b>,</p>
-                <p>Click below to reset your password.</p>
-                <a href='{reset_link}'
-                style='background:#2563eb;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;'>
-                Reset Password
-                </a>
-                <p style='color:#64748b;'>If you didn’t request this, ignore this email.</p>
-            </div>
-        """
+        # 🧩 Initialize Brevo API client
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = app.config.get("BREVO_API_KEY")
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
-        # 5️⃣ Try sending mail
+        # Compose transactional email
+        email_obj = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": email}],
+            sender={"email": "varshinimanchikalapudi@10174898.brevosend.com", "name": "ChatWave"},
+            subject="ChatWave Password Reset 🔐",
+            html_content=f"""
+                <div style='font-family:Inter,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;padding:20px;border-radius:10px;background:#f8fafc;'>
+                    <h2 style='color:#2563eb;text-align:center;margin-top:0;'>Password Reset Request</h2>
+                    <p>Hello <b>{user.get('username', 'there')}</b>,</p>
+                    <p>Click the button below to reset your ChatWave password:</p>
+                    <p style='text-align:center;margin:22px 0;'>
+                        <a href='{reset_link}' style='background:#2563eb;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;'>
+                            Reset Password
+                        </a>
+                    </p>
+                    <p>If you didn’t request this, you can safely ignore this email.</p>
+                    <p style='color:#64748b;font-size:13px;margin-bottom:0;'>This link expires in 30 minutes.</p>
+                </div>
+            """
+        )
+
         try:
-            mail.send(msg)
-            print(f"📧 Email sent to {email}")
+            api_instance.send_transac_email(email_obj)
+            print(f"✅ Password reset email sent to {email}")
             return jsonify({"message": "Reset link sent successfully!"}), 200
-        except Exception as e:
-            print("Email sending error:", e)
-            return jsonify({"error": f"Failed to send email: {str(e)}"}), 500
+        except ApiException as e:
+            print("❌ Brevo API Error:", e)
+            return jsonify({"error": f"Email sending failed: {e}"}), 500
 
 
     @app.route("/reset-password/<token>", methods=["POST"])
     def reset_password(token):
         try:
+            # 30 minutes expiry
             email = serializer.loads(token, salt="password-reset-salt", max_age=1800)
         except SignatureExpired:
             return jsonify({"error": "Link expired"}), 400
         except BadSignature:
-            return jsonify({"error": "Invalid token"}), 400
+            return jsonify({"error": "Invalid or tampered link"}), 400
 
         data = request.get_json() or {}
         new_password = data.get("password")
@@ -216,8 +232,10 @@ def create_app():
 
         hashed_pw = generate_password_hash(new_password)
         mongo.db.users.update_one({"email": email}, {"$set": {"password": hashed_pw}})
-        print(f"✅ Password reset for {email}")
+
+        print(f"✅ Password successfully reset for {email}")
         return jsonify({"message": "Password updated successfully!"}), 200
+
 
     @app.route("/search_users", methods=["GET"])
     def search_users():
