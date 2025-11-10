@@ -180,7 +180,8 @@ def create_app():
         token = serializer.dumps(email, salt="password-reset-salt")
 
         # Frontend reset page (confirm it matches your frontend)
-        reset_link = f"https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app/reset-password/{token}"
+        reset_link = f"https://chatwave-frontend-psi.vercel.app/reset-password/{token}"
+
 
         # ✅ Ensure API key exists (prevents 500)
         api_key = app.config.get("BREVO_API_KEY")
@@ -196,7 +197,7 @@ def create_app():
         # Compose transactional email
         email_obj = sib_api_v3_sdk.SendSmtpEmail(
             to=[{"email": email}],
-            sender={"email": "varshinimanchikalapudi@10174898.brevosend.com", "name": "ChatWave"},
+            sender={"email": "varshinimanchikalapudi@gmail.com", "name": "ChatWave"},
             subject="ChatWave Password Reset 🔐",
             html_content=f"""
                 <div style='font-family:Inter,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;padding:20px;border-radius:10px;background:#f8fafc;'>
