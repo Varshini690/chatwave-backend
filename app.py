@@ -41,6 +41,7 @@ def create_app():
     app,
     resources={r"/*": {
         "origins": [
+            "https://chatwave-frontend-psi.vercel.app",
             "https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app",
             "https://chatwave-backend-9vhe.onrender.com",
             "http://localhost:3000",
@@ -58,10 +59,11 @@ def create_app():
     socketio = SocketIO(
     app,
     cors_allowed_origins=[
-        "https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app",
-        "https://chatwave-backend-9vhe.onrender.com",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "https://chatwave-frontend-psi.vercel.app",
+            "https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app",
+            "https://chatwave-backend-9vhe.onrender.com",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
     ],
     async_mode="gevent",
     ping_timeout=60,
