@@ -102,14 +102,16 @@ def create_app():
             return jsonify({"ok": True}), 200
 
         data = request.get_json() or {}
-        username = data.get("username")
-        email = data.get("email")
-        password = data.get("password")
+        username = data.get("username", "").strip()
+        email = data.get("email", "").strip().lower()   # ✅ Normalize email
+        password = data.get("password", "")
 
         if not username or not email or not password:
             return jsonify({"error": "Missing required fields"}), 400
 
-        if mongo.db.users.find_one({"email": email}):
+        existing_user = mongo.db.users.find_one({"email": email})
+        if existing_user:
+            print(f"⚠️ Attempted re-register: {email}")
             return jsonify({"error": "User already exists"}), 409
 
         hashed_pw = generate_password_hash(password)
@@ -119,8 +121,10 @@ def create_app():
             "password": hashed_pw,
             "created_at": datetime.now(timezone.utc)
         })
-        print(f"✅ Registered: {username} ({email})")
+
+        print(f"✅ Registered new user: {username} ({email})")
         return jsonify({"message": "User registered successfully!"}), 201
+
 
     @app.route("/login", methods=["POST", "OPTIONS"])
     def login_user():
@@ -128,20 +132,26 @@ def create_app():
             return jsonify({"ok": True}), 200
 
         data = request.get_json() or {}
-        email = data.get("email")
-        password = data.get("password")
+        email = data.get("email", "").strip().lower()   # ✅ Normalize email
+        password = data.get("password", "")
 
         user = mongo.db.users.find_one({"email": email})
-        if not user or not check_password_hash(user["password"], password):
+        if not user:
+            print(f"❌ Login failed: no user found for {email}")
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        if not check_password_hash(user["password"], password):
+            print(f"❌ Login failed: wrong password for {email}")
             return jsonify({"error": "Invalid credentials"}), 401
 
         token = create_access_token(identity=str(user["_id"]), expires_delta=timedelta(days=1))
-        print(f"✅ {user['username']} logged in successfully")
+        print(f"✅ {user['username']} logged in successfully ({email})")
         return jsonify({
             "message": "Login successful!",
             "token": token,
             "username": user["username"],
         }), 200
+
 
     @app.route("/forgot-password", methods=["POST"])
     def forgot_password():
