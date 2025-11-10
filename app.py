@@ -1,9 +1,7 @@
 # --- gevent first (no eventlet needed) ---
+# --- gevent first (no eventlet needed) ---
 from gevent import monkey
 monkey.patch_all()
-from flask_mail import Message
-from werkzeug.security import generate_password_hash
-from itsdangerous import SignatureExpired, BadSignature
 
 from datetime import timezone, timedelta, datetime
 from flask import Flask, request, jsonify
@@ -13,9 +11,13 @@ from extensions import mongo, jwt
 from flask_socketio import SocketIO, emit, join_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token
-from flask_mail import Mail, Message
+from flask_mail import Mail  # keep Mail; we won't use SMTP for reset, but Mail is used elsewhere
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from bson import ObjectId
+
+# ✅ Brevo SDK (required for API-based sending)
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 
 """
 ChatWave Backend — Auto-friends + Block + Search
@@ -174,15 +176,21 @@ def create_app():
             print(f"❌ No user found for {email}")
             return jsonify({"error": "User not found"}), 404
 
-        # Generate reset token (30 min expiry handled in reset endpoint)
+        # Generate reset token (30 min expiry enforced in reset endpoint)
         token = serializer.dumps(email, salt="password-reset-salt")
 
-        # 🔗 Use your real frontend reset page:
+        # Frontend reset page (confirm it matches your frontend)
         reset_link = f"https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app/reset-password/{token}"
 
-        # 🧩 Initialize Brevo API client
+        # ✅ Ensure API key exists (prevents 500)
+        api_key = app.config.get("BREVO_API_KEY")
+        if not api_key:
+            print("❌ Missing BREVO_API_KEY in environment")
+            return jsonify({"error": "Email service is not configured. Contact support."}), 500
+
+        # Brevo API client
         configuration = sib_api_v3_sdk.Configuration()
-        configuration.api_key['api-key'] = app.config.get("BREVO_API_KEY")
+        configuration.api_key['api-key'] = api_key
         api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
         # Compose transactional email
