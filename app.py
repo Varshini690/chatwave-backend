@@ -156,18 +156,25 @@ def create_app():
     @app.route("/forgot-password", methods=["POST"])
     def forgot_password():
         data = request.get_json() or {}
-        email = data.get("email")
+        email = (data.get("email") or "").strip().lower()
 
+        # 1️⃣ Check if email is given
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+
+        # 2️⃣ Check if user exists in MongoDB
         user = mongo.db.users.find_one({"email": email})
         if not user:
             return jsonify({"error": "User not found"}), 404
 
+        # 3️⃣ Create reset token
         token = serializer.dumps(email, salt="password-reset-salt")
         reset_link = f"https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app/reset-password/{token}"
 
+        # 4️⃣ Prepare the email message
         msg = Message(
             subject="ChatWave Password Reset 🔐",
-            sender=app.config["MAIL_DEFAULT_SENDER"],
+            sender=app.config.get("MAIL_DEFAULT_SENDER"),
             recipients=[email],
         )
         msg.html = f"""
@@ -176,15 +183,22 @@ def create_app():
                 <p>Hello <b>{user['username']}</b>,</p>
                 <p>Click below to reset your password.</p>
                 <a href='{reset_link}'
-                   style='background:#2563eb;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;'>
-                   Reset Password
+                style='background:#2563eb;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;'>
+                Reset Password
                 </a>
                 <p style='color:#64748b;'>If you didn’t request this, ignore this email.</p>
             </div>
         """
-        mail.send(msg)
-        print(f"📧 Reset link sent to {email}")
-        return jsonify({"message": "Reset link sent!"}), 200
+
+        # 5️⃣ Try sending mail
+        try:
+            mail.send(msg)
+            print(f"📧 Email sent to {email}")
+            return jsonify({"message": "Reset link sent successfully!"}), 200
+        except Exception as e:
+            print("Email sending error:", e)
+            return jsonify({"error": f"Failed to send email: {str(e)}"}), 500
+
 
     @app.route("/reset-password/<token>", methods=["POST"])
     def reset_password(token):
