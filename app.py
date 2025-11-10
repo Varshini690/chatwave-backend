@@ -1,5 +1,5 @@
-from gevent import pywsgi
-from geventwebsocket.handler import WebSocketHandler
+import eventlet
+eventlet.monkey_patch()
 from datetime import timezone, timedelta
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -12,6 +12,8 @@ from flask_jwt_extended import create_access_token
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from bson import ObjectId
+
+
 """
 ChatWave Backend — "Auto-friends + Block + Search" (no friend-requests)
 Matches the new Chat.jsx you added.
@@ -35,16 +37,36 @@ def create_app():
     app.config.from_object(Config)
 
     CORS(
-        app,
-        resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
-        supports_credentials=True,
-    )
+    app,
+    resources={r"/*": {
+        "origins": [
+            "https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app",
+            "https://chatwave-backend-9vhe.onrender.com",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ]
+    }},
+    supports_credentials=True,
+)
+
 
     mongo.init_app(app)
     jwt.init_app(app)
     mail = Mail(app)
     serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+    socketio = SocketIO(
+    app,
+    cors_allowed_origins=[
+        "https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app",
+        "https://chatwave-backend-9vhe.onrender.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    async_mode="eventlet",
+    ping_timeout=60,
+    ping_interval=25
+)
+
 
 
     # ------------------------------------------------------
@@ -143,7 +165,8 @@ def create_app():
             return jsonify({"error": "User not found"}), 404
 
         token = serializer.dumps(email, salt="password-reset-salt")
-        reset_link = f"http://localhost:3000/reset-password/{token}"
+        reset_link = f"https://chatwave-frontend-r4vwc5v1v-hanis-projects-d61265e6.vercel.app/reset-password/{token}"
+
 
         msg = Message(
             subject="ChatWave Password Reset 🔐",
@@ -609,7 +632,10 @@ def create_app():
 # ------------------------------------------------------
 # MAIN ENTRY POINT
 # ------------------------------------------------------
+import os
+
 if __name__ == "__main__":
-    print("🚀 Starting ChatWave Backend (Auto-friends + Block + Search)…")
     app, socketio = create_app()
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
+    print("🚀 Starting ChatWave Backend (Auto-friends + Block + Search)…")
+    socketio.run(app, host="0.0.0.0", port=5000)
+
